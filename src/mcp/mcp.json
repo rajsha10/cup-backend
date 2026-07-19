@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "injective": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "PRIVATE_KEY=\"$TESTNET_PRIVATE_KEY\" node ../mcp-server/dist/mcp/server.js"
+      ],
+      "env": {
+        "INJECTIVE_NETWORK": "testnet"
+      }
+    }
+  }
+}
