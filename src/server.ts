@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { paymentMiddleware, x402ResourceServer } from '@x402/express';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
 import { HTTPFacilitatorClient } from '@x402/core/server';
+import { validateGateEntryOnChain } from './agent/validator.js';
 
 dotenv.config();
 
@@ -21,13 +22,13 @@ let liveMatchState = {
 };
 
 export interface x402ExpressOptions {
-  amount: number | string;
+  amount?: number | string;
   receivingAddress?: string;
   network?: string;
 }
 
 // x402 middleware wrapper: Configures dynamic entry ticket paywall
-export function x402Express(options: x402ExpressOptions) {
+export function x402Express(options: x402ExpressOptions = {}) {
   const receivingAddress = options.receivingAddress || process.env.WALLET_ADDRESS || "0x0000000000000000000000000000000000000000";
   const network = (options.network || "eip155:84532") as "eip155:84532";
 
@@ -61,20 +62,12 @@ export function x402Express(options: x402ExpressOptions) {
     },
   };
 
-  const x402Middleware = paymentMiddleware(routes, resourceServer);
-
-  return (req: Request, res: Response, next: NextFunction) => {
-    // Allow bypassing paywall for mock testing/hackathon via test token
-    if (req.headers.authorization === "Bearer MOCK_x402_PAYMENT_TOKEN") {
-      return next();
-    }
-    return x402Middleware(req, res, next);
-  };
+  return paymentMiddleware(routes, resourceServer);
 }
 
 // x402 Middleware: Charging $0.01 USDC per dynamic gate-pass validation look up
 const gatePaywall = x402Express({
-  amount: 10000, 
+  amount: "$0.01", 
   receivingAddress: process.env.WALLET_ADDRESS
 });
 
@@ -137,13 +130,41 @@ app.get('/api/events/live-feed', (req: Request, res: Response) => {
   res.json(liveMatchState);
 });
 
-// Admin endpoint to simulate match actions for your demo video
+// Admin endpoint to simulate match actions for your demo video / event panel
 app.post('/api/admin/simulate-trigger', (req: Request, res: Response) => {
-  const { eventType, score } = req.body;
-  liveMatchState.recentEvent = eventType; // e.g., "GOAL" or "MATCH_END_WIN"
+  const { eventType, recentEvent, score, minute, eventId } = req.body;
+  if (eventType || recentEvent) liveMatchState.recentEvent = eventType || recentEvent;
   if (score) liveMatchState.score = score;
+  if (minute !== undefined && !isNaN(Number(minute))) liveMatchState.minute = Number(minute);
+  if (eventId) liveMatchState.eventId = eventId;
   
-  res.json({ success: true, message: `Simulated event: ${eventType}` });
+  res.json({
+    success: true,
+    message: `Simulated event: ${liveMatchState.recentEvent}`,
+    state: liveMatchState
+  });
+});
+
+/**
+ * 3. Turnstile Gate Agent Validation Endpoint
+ * Receives live scanned tokenId from turnstiles/frontend and executes contract.validateGateEntry(tokenId) on-chain
+ */
+app.post('/api/validator/scan', async (req: Request, res: Response) => {
+  const { tokenId } = req.body;
+  if (!tokenId) {
+    return res.status(400).json({ error: "Missing scanned tokenId parameter" });
+  }
+
+  try {
+    const result = await validateGateEntryOnChain(tokenId);
+    return res.json(result);
+  } catch (err: any) {
+    console.error("❌ On-chain turnstile gate validation failed:", err.message || err);
+    return res.status(500).json({
+      error: "On-chain gate validation failed",
+      details: err.message || String(err),
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3000;

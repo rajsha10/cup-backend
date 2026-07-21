@@ -1,99 +1,76 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { ethers } from "ethers";
 import dotenv from "dotenv";
+import express, { Request, Response } from "express";
 
 dotenv.config();
 
-let activeWalletAddress: string = process.env.INJECTIVE_ADDRESS || "";
-
-const transport = new StdioClientTransport({
-  command: "node",
-  args: ["../mcp-server/dist/mcp/server.js"],
-  env: {
-    INJECTIVE_NETWORK: "testnet"
-  }
-});
-
-const mcpClient = new Client({ name: "InjPassValidator", version: "1.0.0" }, { capabilities: {} });
-
 const INEVM_RPC_URL = process.env.INEVM_RPC_URL || 'https://k8s.testnet.json-rpc.injective.network/';
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || process.env.INJPASS_CONTRACT_ADDRESS || process.env.INJECTIVE_TESTNET_CONTRACT_ADDRESS;
-const PRIVATE_KEY = process.env.TESTNET_PRIVATE_KEY;
+const PRIVATE_KEY = process.env.TESTNET_PRIVATE_KEY || process.env.PRIVATE_KEY;
 
 const CONTRACT_ABI = [
-  "function validateGateEntry(uint256 _tokenId) public"
+  "function validateGateEntry(uint256 _tokenId) public",
+  "function ticketRegistry(uint256) view returns (uint256 tokenId, address owner, string eventId, bool isValidated, bool teamWon, string baseUri)"
 ];
 
-async function runGateCheck() {
-  console.log("🔍 Stadium Validator scanning for incoming gate tokens...");
-  
-  // 1. Simulates pings from a stadium turnstile scanning a phone
-  const mockScannedToken = "MC0xWDU1ZGM...=="; 
+/**
+ * Receives live scanned tokenId from frontend and executes contract.validateGateEntry(tokenId) on-chain
+ */
+export async function validateGateEntryOnChain(tokenId: string | number) {
+  const numericTokenId = BigInt(tokenId || 1);
+  console.log(`🎟️ Stadium Validator processing live scanned Token #${numericTokenId}...`);
 
-  // Execute real on-chain transaction if CONTRACT_ADDRESS & PRIVATE_KEY exist
-  if (CONTRACT_ADDRESS && PRIVATE_KEY) {
+  if (!CONTRACT_ADDRESS || !PRIVATE_KEY) {
+    throw new Error("Missing CONTRACT_ADDRESS or TESTNET_PRIVATE_KEY in environment configuration.");
+  }
+
+  console.log(`🌐 Submitting contract.validateGateEntry(${numericTokenId}) on-chain to Injective EVM Testnet (${CONTRACT_ADDRESS})...`);
+  const provider = new ethers.JsonRpcProvider(INEVM_RPC_URL);
+  const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, wallet);
+
+  const tx = await contract.validateGateEntry(numericTokenId);
+  console.log(`⏳ On-chain Tx submitted! Hash: ${tx.hash}`);
+  const blockExplorer = `https://testnet.blockscout.injective.network/tx/${tx.hash}`;
+  console.log(`🔗 Explorer: ${blockExplorer}`);
+
+  await tx.wait();
+  console.log(`✅ Ticket #${numericTokenId} authenticated & validated on-chain via Injective EVM! Gate opened.`);
+
+  return {
+    success: true,
+    tokenId: numericTokenId.toString(),
+    txHash: tx.hash,
+    blockExplorer,
+  };
+}
+
+// Standalone Agent Listener (starts express server if run directly)
+if (require.main === module) {
+  const app = express();
+  app.use(express.json());
+
+  app.post(['/api/validator/scan', '/scan'], async (req: Request, res: Response) => {
+    const { tokenId } = req.body;
+    if (!tokenId) {
+      return res.status(400).json({ error: "Missing scanned tokenId parameter" });
+    }
+
     try {
-      console.log(`🌐 Submitting real on-chain transaction to Injective EVM Testnet (${CONTRACT_ADDRESS})...`);
-      const provider = new ethers.JsonRpcProvider(INEVM_RPC_URL);
-      const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, wallet);
-
-      const tx = await contract.validateGateEntry(1);
-      console.log(`⏳ On-chain Tx submitted! Hash: ${tx.hash}`);
-      console.log(`🔗 Explorer: https://testnet.blockscout.injective.network/tx/${tx.hash}`);
-      await tx.wait();
-      console.log("✅ Ticket authenticated & validated on-chain via Injective EVM! Gate opened.");
-      return;
-    } catch (onChainErr: any) {
-      console.warn("⚠️ On-chain transaction notice (falling back to MCP bridge / simulation):", onChainErr.message || onChainErr);
+      const result = await validateGateEntryOnChain(tokenId);
+      res.json(result);
+    } catch (err: any) {
+      console.error("❌ Gate validation on-chain error:", err.message || err);
+      res.status(500).json({
+        error: "On-chain gate validation failed",
+        details: err.message || String(err),
+      });
     }
-  }
+  });
 
-  try {
-    // 2. Fallback / MCP execution pathway
-    const result: any = await mcpClient.callTool({
-      name: "trade_open",
-      arguments: {
-        symbol: "INJ/USDT",
-        side: "long",
-        amount: "1",
-        address: activeWalletAddress,
-        password: "agentic-password"
-      }
-    });
-
-    console.log("✅ Ticket authenticated via Injective Layer! Gate opened.");
-  } catch (error) {
-    console.error("❌ Fraudulent ticket detected or out-of-gas rejection.");
-  }
+  const PORT = process.env.VALIDATOR_PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`🎟️ InjPass Stadium Gate Validator Agent running on Port ${PORT}`);
+    console.log(`📡 Ready to receive live scanned token IDs from turnstiles.`);
+  });
 }
-
-async function startValidator() {
-  console.log("🎟️ InjPass Stadium Gate Validator Agent Starting...");
-
-  try {
-    await mcpClient.connect(transport);
-    console.log("🔗 Connected to Injective MCP Server");
-
-    if (process.env.TESTNET_PRIVATE_KEY) {
-      try {
-        await mcpClient.callTool({
-          name: "wallet_import",
-          arguments: {
-            privateKeyHex: process.env.TESTNET_PRIVATE_KEY,
-            password: "agentic-password"
-          }
-        });
-      } catch (err: any) {
-        console.log("ℹ️ Wallet setup notice:", err.message || JSON.stringify(err));
-      }
-    }
-  } catch (connErr) {
-    console.warn("⚠️ MCP Client connection warning (running in hybrid mode):", connErr);
-  }
-
-  setInterval(runGateCheck, 10000);
-}
-
-startValidator();
