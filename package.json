@@ -9,12 +9,14 @@
     "start:agent": "ts-node src/agent/validator.ts",
     "start:fan-manager": "ts-node src/agent/fanManager.ts",
     "deploy:contract": "ts-node src/contract/deploy.ts",
+    "compile": "hardhat compile",
+    "deploy:hardhat": "hardhat run scripts/deploy.js --network injectiveTestnet",
     "dev": "concurrently \"npm run start:server\" \"npm run start:agent\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "@injectivelabs/sdk-ts": "^1.20.24",
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -30,11 +32,29 @@
     "jstat": "^1.9.6"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ignition": "^0.15.0",
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@nomicfoundation/ignition-core": "^0.15.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^26.1.0",
+    "chai": "^4.2.0",
     "concurrently": "^10.0.3",
+    "hardhat": "^2.22.19",
+    "hardhat-gas-reporter": "^1.0.8",
+    "solc": "^0.8.20",
+    "solidity-coverage": "^0.8.1",
     "ts-node": "^10.9.2",
+    "typechain": "^8.3.0",
     "typescript": "^5.5.4"
   }
 }

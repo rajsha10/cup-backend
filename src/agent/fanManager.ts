@@ -18,7 +18,7 @@ const transport = new StdioClientTransport({
 const mcpClient = new Client({ name: "InjPassFanManager", version: "1.0.0" }, { capabilities: {} });
 
 const INEVM_RPC_URL = process.env.INEVM_RPC_URL || 'https://k8s.testnet.json-rpc.injective.network/';
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || process.env.INJPASS_CONTRACT_ADDRESS || process.env.INJECTIVE_TESTNET_CONTRACT_ADDRESS;
 const PRIVATE_KEY = process.env.TESTNET_PRIVATE_KEY;
 
 const CONTRACT_ABI = [
