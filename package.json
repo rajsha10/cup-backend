@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start:server": "ts-node src/server.ts",
-    "start:agent": "ts-node src/agent/validator.ts",
-    "start:fan-manager": "ts-node src/agent/fanManager.ts",
-    "deploy:contract": "ts-node src/contract/deploy.ts",
+    "start:server": "node --loader ts-node/esm src/server.ts",
+    "start:agent": "node --loader ts-node/esm src/agent/validator.ts",
+    "start:fan-manager": "node --loader ts-node/esm src/agent/fanManager.ts",
+    "deploy:contract": "node --loader ts-node/esm src/contract/deploy.ts",
     "compile": "hardhat compile",
     "deploy:hardhat": "hardhat run scripts/deploy.js --network injectiveTestnet",
     "dev": "concurrently \"npm run start:server\" \"npm run start:agent\""

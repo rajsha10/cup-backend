@@ -1,6 +1,9 @@
 import { ethers } from "ethers";
 import dotenv from "dotenv";
-import express, { Request, Response } from "express";
+import express from "express";
+import type { Request, Response } from "express";
+import { fileURLToPath } from "url";
+import path from "path";
 
 dotenv.config();
 
@@ -46,7 +49,12 @@ export async function validateGateEntryOnChain(tokenId: string | number) {
 }
 
 // Standalone Agent Listener (starts express server if run directly)
-if (require.main === module) {
+const isDirectRun = process.argv[1] && (
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url)) ||
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url).replace(/\.ts$/, '.js'))
+);
+
+if (isDirectRun) {
   const app = express();
   app.use(express.json());
 
